@@ -34,6 +34,8 @@
         let score = 0;
         let gameOver = false;
         let gameSpeed = 6;
+        let spawnTimer = 0;
+        let minSpawnInterval = 90; // Гарантира дистанция между препятствията
 
         const ninja = {
             x: 100, y: 270, w: 30, h: 50,
@@ -41,10 +43,10 @@
             trail: []
         };
 
-        const obstacles = [];
+        let obstacles = [];
 
         function jump() {
-            if (!ninja.isJumping) {
+            if (!ninja.isJumping && !gameOver) {
                 ninja.vy = -14;
                 ninja.isJumping = true;
             } else if (gameOver) {
@@ -52,14 +54,22 @@
             }
         }
 
-        window.addEventListener('keydown', e => { if(e.code === 'Space') jump(); });
+        window.addEventListener('keydown', e => { 
+            if (e.code === 'Space') {
+                e.preventDefault();
+                jump(); 
+            }
+        });
 
         function resetGame() {
             score = 0;
             gameSpeed = 6;
-            obstacles.length = 0;
+            spawnTimer = 0;
+            obstacles = [];
             ninja.y = 270;
             ninja.vy = 0;
+            ninja.isJumping = false;
+            ninja.trail = [];
             gameOver = false;
             update();
         }
@@ -67,9 +77,11 @@
         function update() {
             if (gameOver) return;
 
+            // Ефект за следа (Motion Blur)
             ninja.trail.push({x: ninja.x, y: ninja.y});
             if (ninja.trail.length > 6) ninja.trail.shift();
 
+            // Физика на играча
             ninja.vy += ninja.gravity;
             ninja.y += ninja.vy;
             if (ninja.y >= 270) {
@@ -78,17 +90,32 @@
                 ninja.isJumping = false;
             }
 
-            if (Math.random() < 0.02) {
-                obstacles.push({x: 800, w: 20 + Math.random()*20, h: 30 + Math.random()*30});
+            // Контролиран спаун на препятствия (с гаранция за разстояние)
+            spawnTimer++;
+            if (spawnTimer > minSpawnInterval) {
+                if (Math.random() < 0.6) {
+                    obstacles.push({
+                        x: 800,
+                        w: Math.floor(Math.random() * 15) + 20,
+                        h: Math.floor(Math.random() * 25) + 30
+                    });
+                    spawnTimer = 0;
+                    minSpawnInterval = Math.floor(Math.random() * 40) + 70; // Разстояние между 70 и 110 кадъра
+                }
             }
 
+            // Движение и колизии
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 obstacles[i].x -= gameSpeed;
-                
-                if (ninja.x < obstacles[i].x + obstacles[i].w &&
-                    ninja.x + ninja.w > obstacles[i].x &&
-                    ninja.y < 320 &&
-                    ninja.y + ninja.h > 320 - obstacles[i].h) {
+
+                // Точен Hitbox (с лек толеранс от 4px за по-честна игра)
+                const pad = 4;
+                if (
+                    ninja.x + pad < obstacles[i].x + obstacles[i].w &&
+                    ninja.x + ninja.w - pad > obstacles[i].x &&
+                    ninja.y + pad < 320 &&
+                    ninja.y + ninja.h - pad > 320 - obstacles[i].h
+                ) {
                     gameOver = true;
                 }
 
@@ -96,39 +123,49 @@
             }
 
             score++;
+            if (score % 600 === 0 && gameSpeed < 12) {
+                gameSpeed += 0.5; // Постепенно увеличаване на скоростта
+            }
+
             draw();
             requestAnimationFrame(update);
         }
 
         function draw() {
+            // Фон
             ctx.fillStyle = '#0f0a19';
             ctx.fillRect(0, 0, 800, 400);
 
+            // Покрив
             ctx.fillStyle = '#281432';
             ctx.fillRect(0, 320, 800, 80);
             ctx.strokeStyle = '#ff1493';
             ctx.lineWidth = 4;
             ctx.beginPath(); ctx.moveTo(0, 320); ctx.lineTo(800, 320); ctx.stroke();
 
+            // Следа зад героя
             ninja.trail.forEach((t, i) => {
-                ctx.fillStyle = `rgba(0, 240, 255, ${0.1 * i})`;
+                ctx.fillStyle = `rgba(0, 240, 255, ${0.08 * (i + 1)})`;
                 ctx.fillRect(t.x, t.y, ninja.w, ninja.h);
             });
 
+            // Нинджа
             ctx.fillStyle = '#00f0ff';
             ctx.fillRect(ninja.x, ninja.y, ninja.w, ninja.h);
 
+            // Препятствия
             ctx.fillStyle = '#ff1493';
             obstacles.forEach(o => ctx.fillRect(o.x, 320 - o.h, o.w, o.h));
 
+            // Точки
             ctx.fillStyle = '#00f0ff';
             ctx.font = '20px Consolas';
-            ctx.fillText(`SCORE: ${score}`, 650, 40);
+            ctx.fillText(`SCORE: ${score}`, 630, 40);
 
             if (gameOver) {
                 ctx.fillStyle = '#ff1493';
-                ctx.font = '30px Consolas';
-                ctx.fillText('GAME OVER - Press SPACE', 200, 200);
+                ctx.font = '28px Consolas';
+                ctx.fillText('GAME OVER - Press SPACE', 220, 180);
             }
         }
 
